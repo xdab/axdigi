@@ -4,17 +4,17 @@ AX.25 layer 2 digipeater for networked TNCs.
 
 ## TODO
 
-- [ ] Implement basic TCP client connecting to TNC (hardcoded IP/port)
-  - [ ] Use `tcp_client_init()` from libtnc
-  - [ ] Connect to 192.168.0.9:8144
-  - [ ] Handle connection errors
-  - [ ] Main event loop with select()
+- [x] Implement basic TCP client connecting to TNC (hardcoded IP/port)
+  - [x] Use `tcp_client_init()` from libtnc
+  - [x] Connect to 192.168.0.9:8144
+  - [x] Handle connection errors
+  - [x] Main event loop with select()
 
-- [ ] Implement KISS frame decoding pipeline
-  - [ ] Initialize `kiss_decoder_t`
-  - [ ] Process TCP bytes through decoder
-  - [ ] Handle complete KISS messages
-  - [ ] Parse AX.25 packet from KISS data
+- [x] Implement KISS frame decoding pipeline
+  - [x] Initialize `kiss_decoder_t`
+  - [x] Process TCP bytes through decoder
+  - [x] Handle complete KISS messages
+  - [x] Parse AX.25 packet from KISS data
 
 - [ ] Implement TNC2 output to stdout
   - [ ] Use `tnc2_packet_to_string()` from libtnc

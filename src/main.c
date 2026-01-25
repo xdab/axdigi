@@ -53,9 +53,14 @@ static void process_kiss(kiss_decoder_t *decoder, uint8_t byte, ax25_packet_t *p
 int main(void)
 {
     tcp_client_t client;
-    char tcp_buf[TCP_READ_BUF_SIZE];
     kiss_decoder_t decoder;
     ax25_packet_t packet;
+    
+    char tcp_buf_data[TCP_READ_BUF_SIZE];
+    buffer_t tcp_buf = {
+        .data = tcp_buf_data,
+        .capacity = TCP_READ_BUF_SIZE,
+        .size = 0};
 
     _log_level = LOG_LEVEL_VERBOSE;
     _func_pad = -16;
@@ -89,7 +94,7 @@ int main(void)
         if (ret == 0)
             continue;
 
-        int len = tcp_client_process(&client, tcp_buf, sizeof(tcp_buf));
+        int len = tcp_client_listen(&client, &tcp_buf);
         if (len < 0)
         {
             LOG("connection lost");
@@ -100,7 +105,7 @@ int main(void)
             continue;
 
         for (int i = 0; i < len; i++)
-            process_kiss(&decoder, (uint8_t)tcp_buf[i], &packet);
+            process_kiss(&decoder, (uint8_t)tcp_buf_data[i], &packet);
     }
 
     LOG("shutting down...");

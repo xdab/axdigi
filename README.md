@@ -16,10 +16,10 @@ AX.25 layer 2 digipeater for networked TNCs.
   - [x] Handle complete KISS messages
   - [x] Parse AX.25 packet from KISS data
 
-- [ ] Implement TNC2 output to stdout
-  - [ ] Use `tnc2_packet_to_string()` from libtnc
-  - [ ] Print each packet on new line
-  - [ ] Flush stdout after each packet
+- [x] Implement TNC2 output to stdout
+  - [x] Use `tnc2_packet_to_string()` from libtnc
+  - [x] Print each packet on new line
+  - [x] Flush stdout after each packet
 
 - [ ] Create unit test framework (axdigi_test executable)
   - [ ] Create `src/test.c` with main entry point
@@ -32,7 +32,7 @@ AX.25 layer 2 digipeater for networked TNCs.
   - [ ] Link against libtnc and math library
   
 - [ ] Implement basic digipeater logic (own callsign)
-  - [ ] Detect own callsign in packet path
+  - [x] Detect own callsign in packet path
   - [ ] Set repeated flag on matching ax25_addr
   - [ ] Re-encode packet for transmission
   - [ ] Send back via TCP to TNC
@@ -41,7 +41,7 @@ AX.25 layer 2 digipeater for networked TNCs.
   - [ ] Test: multiple occurrences of callsign handled correctly
 
 - [ ] Implement traced alias digipeating (WIDE2-2, TRACE3-1)
-  - [ ] Parse alias format: NAME-HOPS (e.g., WIDE2-2)
+  - [x] Parse alias format: NAME-HOPS (e.g., WIDE2-2)
   - [ ] Decrement hops remaining counter
   - [ ] Prepend own callsign (repeated=true) before alias
   - [ ] When hops reach 0, mark alias as repeated (NAME*)
@@ -52,7 +52,7 @@ AX.25 layer 2 digipeater for networked TNCs.
   - [ ] Test: Multiple traced aliases in same path
 
 - [ ] Implement untraced alias digipeating (SP3-1, AROS3-1)
-  - [ ] Parse alias format: NAME-HOPS (e.g., SP3-1)
+  - [x] Parse alias format: NAME-HOPS (e.g., SP3-1)
   - [ ] Decrement hops remaining counter
   - [ ] Mark alias as repeated when hops reach 0
   - [ ] Do NOT prepend callsign before alias

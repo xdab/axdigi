@@ -2,6 +2,14 @@
 
 AX.25 layer 2 digipeater for networked TNCs.
 
+## WORK IN PROGRESS
+
+**This project is a WORK IN PROGRESS!**
+
+There is no description, no configurability, no tests, debug prints everywher, AI slop code and other similar features.
+
+Viewer discretion is advised.
+
 ## TODO
 
 - [x] Implement basic TCP client connecting to TNC (hardcoded IP/port)

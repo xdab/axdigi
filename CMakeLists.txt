@@ -11,8 +11,8 @@ include_directories(include)
 # Add the libtnc subdirectory
 add_subdirectory(libs/libtnc)
 
-# Main executable
-add_executable(axdigi src/main.c src/alias.c)
+file(GLOB SOURCES "src/*.c")
+add_executable(axdigi ${SOURCES})
 target_link_libraries(axdigi PRIVATE tnc m)
 target_include_directories(axdigi PRIVATE libs/libtnc/include)
 

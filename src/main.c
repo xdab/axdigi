@@ -8,16 +8,15 @@
 #include <ax25.h>
 #include <tnc2.h>
 #include <buffer.h>
+#include <crc.h>
+#include <time.h>
+#include "alias.h"
+
+#define DEDUPLICATION_SECONDS 30
 
 static ax25_addr_t own_call;
+static alias_list_t aliases;
 
-static int num_untraced_aliases = 0;
-static ax25_addr_t untraced_aliases[16];
-
-static int num_traced_aliases = 0;
-static ax25_addr_t traced_aliases[16];
-
-static uint8_t tnc2_output_buffer[512];
 static volatile sig_atomic_t g_shutdown_requested = 0;
 
 static void signal_handler(int sig)
@@ -26,38 +25,10 @@ static void signal_handler(int sig)
     g_shutdown_requested = 1;
 }
 
-static void configure_untraced_alias(const char *alias, int max_hops)
+static void log_packet(const char *msg, const ax25_packet_t *packet)
 {
-    char tmp[16] = {0};
-    for (int hops = 1; hops <= max_hops; hops++)
-    {
-        snprintf(tmp, 16, "%s%d", alias, hops);
-        ax25_addr_init_with(&untraced_aliases[num_untraced_aliases++], tmp, 0, false);
-    }
-}
-
-static void configure_traced_alias(const char *alias, int max_hops)
-{
-    char tmp[16] = {0};
-    for (int hops = 1; hops <= max_hops; hops++)
-    {
-        snprintf(tmp, 16, "%s%d", alias, hops);
-        ax25_addr_init_with(&traced_aliases[num_traced_aliases++], tmp, 0, false);
-    }
-}
-
-static bool base_call_equal(const ax25_addr_t *addr1, const ax25_addr_t *addr2)
-{
-    if (addr1 == NULL)
-        return addr2 == NULL;
-    if (addr2 == NULL)
-        return addr1 == NULL;
-    return !strncasecmp(addr1->callsign, addr2->callsign, AX25_ADDR_MAX_CALLSIGN_LEN);
-}
-
-static void process_packet(ax25_packet_t *packet)
-{
-    buffer_t tnc2_buf = {
+    static char tnc2_output_buffer[512];
+    static buffer_t tnc2_buf = {
         .data = tnc2_output_buffer,
         .capacity = sizeof(tnc2_output_buffer),
         .size = 0};
@@ -68,47 +39,93 @@ static void process_packet(ax25_packet_t *packet)
         return;
     }
 
-    LOG("rx %s", (char *)tnc2_buf.data);
+    LOG("%s %s", msg, tnc2_buf.data);
+}
+
+static bool digipeat(ax25_packet_t *packet)
+{
+    if (!strncasecmp(packet->source.callsign, own_call.callsign, AX25_ADDR_MAX_CALLSIGN_LEN) && packet->source.ssid == own_call.ssid)
+    {
+        LOGV("own packet");
+        return false;
+    }
 
     int own_call_idx = -1;
-    int untraced_alias_idx = -1;
-    int traced_alias_idx = -1;
+    alias_t *alias = NULL;
+    int alias_idx = -1;
 
     for (int i = 0; i < packet->path_len; i++)
     {
         ax25_addr_t *addr = &packet->path[i];
+
+        if (own_call_idx < 0 && !strncasecmp(addr->callsign, own_call.callsign, AX25_ADDR_MAX_CALLSIGN_LEN) && addr->ssid == own_call.ssid)
+            own_call_idx = i;
+
         if (addr->repeated)
             continue;
 
-        if (own_call_idx < 0 && base_call_equal(addr, &own_call))
-            own_call_idx = i;
-
-        for (int j = 0; j < num_untraced_aliases && untraced_alias_idx < 0; j++)
-            if (base_call_equal(addr, &untraced_aliases[j]))
-                untraced_alias_idx = i;
-
-        for (int j = 0; j < num_traced_aliases && traced_alias_idx < 0; j++)
-            if (base_call_equal(addr, &traced_aliases[j]))
-                traced_alias_idx = i;
+        if (!alias && (alias = alias_list_find(&aliases, addr)))
+            alias_idx = i;
     }
 
     if (own_call_idx >= 0)
-        LOG("own call at index %d", own_call_idx)
+    {
+        LOGV("own call at index %d", own_call_idx);
+        ax25_addr_t *own_call_addr = &packet->path[own_call_idx];
+        if (own_call_addr->repeated)
+        {
+            LOGV("already repeated");
+            return false;
+        }
+    }
 
-    if (untraced_alias_idx >= 0)
-        LOG("untraced alias at index %d", untraced_alias_idx)
+    if (alias_idx < 0)
+    {
+        LOGV("no matching digipeating instruction");
+        return false;
+    }
 
-    if (traced_alias_idx >= 0)
-        LOG("traced alias at index %d", traced_alias_idx)
+    LOGV("alias at index %d, %straced", alias_idx, alias->traced ? "" : "un");
+
+    if (0 == packet->path[alias_idx].ssid)
+    {
+        LOGV("fully used alias");
+        return false;
+    }
+
+    if (alias->traced)
+    {
+        if (packet->path_len == AX25_MAX_PATH_LEN)
+        {
+            LOGV("packet path full");
+            return false;
+        }
+
+        packet->path[alias_idx + 1] = packet->path[alias_idx];
+        if (0 == --packet->path[alias_idx + 1].ssid)
+            packet->path[alias_idx + 1].repeated = true;
+
+        packet->path[alias_idx] = own_call;
+        packet->path[alias_idx].repeated = true;
+
+        packet->path_len++;
+    }
+    else // (untraced)
+    {
+        if (0 == --packet->path[alias_idx].ssid)
+            packet->path[alias_idx].repeated = true;
+    }
+
+    return true;
 }
 
-static void process_kiss(kiss_decoder_t *decoder, uint8_t byte, ax25_packet_t *packet)
+static bool decode(kiss_decoder_t *decoder, uint8_t byte, ax25_packet_t *packet)
 {
     kiss_message_t kiss_msg;
 
     int result = kiss_decoder_process(decoder, byte, &kiss_msg);
     if (result <= 0)
-        return;
+        return false;
 
     buffer_t kiss_buf = {
         .data = kiss_msg.data,
@@ -118,10 +135,59 @@ static void process_kiss(kiss_decoder_t *decoder, uint8_t byte, ax25_packet_t *p
     if (ax25_packet_unpack(packet, &kiss_buf) != AX25_SUCCESS)
     {
         LOG("invalid ax25 packet");
-        return;
+        return false;
     }
 
-    process_packet(packet);
+    return true;
+}
+
+static bool encode(ax25_packet_t *packet, buffer_t *out_buf)
+{
+    kiss_message_t kiss_msg;
+    kiss_msg.command = 0;
+    kiss_msg.port = 0;
+
+    buffer_t kiss_buf = {
+        .data = kiss_msg.data,
+        .capacity = sizeof(kiss_msg.data),
+        .size = 0};
+
+    ax25_error_e err = ax25_packet_pack(packet, &kiss_buf);
+    if (err != AX25_SUCCESS)
+        return false;
+    kiss_msg.data_length = kiss_buf.size;
+
+    int result = kiss_encode(&kiss_msg, out_buf->data, out_buf->capacity);
+    if (result <= 0)
+        return false;
+    out_buf->size = result;
+
+    return true;
+}
+
+static bool deduplicate(const ax25_packet_t *packet, uint16_t *last_crc, time_t *last_time)
+{
+    crc_ccitt_t crc;
+    crc_ccitt_init(&crc);
+    crc_ccitt_update_buffer(&crc, (const uint8_t *)&packet->source, sizeof(ax25_addr_t));
+    crc_ccitt_update_buffer(&crc, (const uint8_t *)&packet->destination, sizeof(ax25_addr_t));
+    crc_ccitt_update_buffer(&crc, (const uint8_t *)&packet->control, 1);
+    crc_ccitt_update_buffer(&crc, (const uint8_t *)&packet->protocol, 1);
+    crc_ccitt_update_buffer(&crc, (const uint8_t *)packet->info, packet->info_len);
+    uint16_t packet_crc = crc_ccitt_get(&crc);
+
+    time_t now = time(NULL);
+
+    if (packet_crc != *last_crc)
+    {
+        *last_crc = packet_crc;
+        *last_time = now;
+        return true;
+    }
+
+    time_t time_diff = now - *last_time;
+    *last_time = now;
+    return time_diff > DEDUPLICATION_SECONDS;
 }
 
 int main(void)
@@ -129,10 +195,18 @@ int main(void)
     tcp_client_t client;
     kiss_decoder_t decoder;
     ax25_packet_t packet;
+    uint16_t last_rx_crc, last_tx_crc;
+    time_t last_rx_time, last_tx_time;
 
     char tcp_buf_data[TCP_READ_BUF_SIZE];
     buffer_t tcp_buf = {
         .data = tcp_buf_data,
+        .capacity = TCP_READ_BUF_SIZE,
+        .size = 0};
+
+    char tcp_send_buf_data[TCP_READ_BUF_SIZE];
+    buffer_t tcp_send_buf = {
+        .data = tcp_send_buf_data,
         .capacity = TCP_READ_BUF_SIZE,
         .size = 0};
 
@@ -144,15 +218,12 @@ int main(void)
 
     kiss_decoder_init(&decoder);
     ax25_addr_init_with(&own_call, "SR5DZ", 0, false);
-
-    num_untraced_aliases = 0;
-    configure_untraced_alias("SP", 2);
-    configure_untraced_alias("XR", 2);
-    configure_untraced_alias("ND", 2);
-
-    num_traced_aliases = 0;
-    configure_traced_alias("WIDE", 2);
-    configure_traced_alias("TRACE", 2);
+    alias_list_init(&aliases);
+    alias_list_add(&aliases, "SP", 2, false);
+    alias_list_add(&aliases, "XR", 2, false);
+    alias_list_add(&aliases, "ND", 2, false);
+    alias_list_add(&aliases, "WIDE", 2, true);
+    alias_list_add(&aliases, "TRACE", 2, true);
 
     LOG("connecting to TNC at 192.168.0.9:8144...");
 
@@ -189,7 +260,41 @@ int main(void)
             continue;
 
         for (int i = 0; i < len; i++)
-            process_kiss(&decoder, (uint8_t)tcp_buf_data[i], &packet);
+        {
+            if (!decode(&decoder, tcp_buf_data[i], &packet))
+                continue;
+
+            if (!deduplicate(&packet, &last_rx_crc, &last_rx_time))
+            {
+                LOGV("duplicate");
+                continue;
+            }
+
+            log_packet("rx", &packet);
+
+            if (!digipeat(&packet))
+                continue;
+
+            if (!deduplicate(&packet, &last_tx_crc, &last_tx_time))
+            {
+                LOGV("would transmit duplicate");
+                continue;
+            }
+
+            if (!encode(&packet, &tcp_send_buf))
+            {
+                LOGV("could not encode packet for tx");
+                continue;
+            }
+
+            if (tcp_client_send(&client, &tcp_send_buf) < 0)
+            {
+                LOG("failed to send packet");
+                continue;
+            }
+
+            log_packet("TX", &packet);
+        }
     }
 
     LOG("shutting down...");

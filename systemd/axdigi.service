@@ -1,0 +1,18 @@
+[Unit]
+Description=axdigi Service
+After=network.target
+
+[Service]
+User=root
+ExecStart=/usr/local/bin/axdigi
+
+# Restart policy: Retry forever every 5 seconds on failure
+Restart=on-failure
+RestartSec=5
+StartLimitIntervalSec=0
+
+# Type simple ensures it doesn't block system startup
+Type=simple
+
+[Install]
+WantedBy=multi-user.target

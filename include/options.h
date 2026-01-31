@@ -8,6 +8,7 @@
 
 #define OPT_HOST "host"
 #define OPT_PORT "port"
+#define OPT_SOCKET "socket"
 #define OPT_CALL "call"
 #define OPT_SSID "ssid"
 #define OPT_ALIASES_UNTRACED "aliases-untraced"
@@ -25,6 +26,7 @@
 
 #define OPT_SHORT_HOST 'h'
 #define OPT_SHORT_PORT 'p'
+#define OPT_SHORT_SOCKET 'x'
 #define OPT_SHORT_CALL 'C'
 #define OPT_SHORT_SSID 's'
 #define OPT_SHORT_ALIASES_UNTRACED 'u'
@@ -48,7 +50,8 @@ typedef struct options
     char config_file[OPT_STR_SIZE];
     char host[64];
     int port;
-    
+    char socket[OPT_STR_SIZE];
+
     char call[8];
     int ssid;
     

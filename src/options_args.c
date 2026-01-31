@@ -8,6 +8,7 @@ static struct argp_option options[] = {
     {OPT_CONFIG, OPT_SHORT_CONFIG, "FILE", 0, "Configuration file", 0},
     {OPT_HOST, OPT_SHORT_HOST, "HOST", 0, "TNC host address", 1},
     {OPT_PORT, OPT_SHORT_PORT, "PORT", 0, "TNC port (default: 8144)", 1},
+    {OPT_SOCKET, OPT_SHORT_SOCKET, "PATH", 0, "Unix socket path", 1},
 
     {OPT_CALL, OPT_SHORT_CALL, "CALL", 0, "Digipeater callsign", 2},
     {OPT_SSID, OPT_SHORT_SSID, "SSID", 0, "Digipeater SSID", 2},
@@ -36,6 +37,9 @@ static error_t parse_opt(int key, char *arg, struct argp_state *state)
         break;
     case OPT_SHORT_PORT:
         opts->port = atoi(arg);
+        break;
+    case OPT_SHORT_SOCKET:
+        strncpy(opts->socket, arg, sizeof(opts->socket) - 1);
         break;
     case OPT_SHORT_CALL:
         strncpy(opts->call, arg, sizeof(opts->call) - 1);

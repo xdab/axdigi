@@ -10,6 +10,7 @@ void opts_init(options_t *opts)
     opts->config_file[0] = '\0';
     opts->host[0] = '\0';
     opts->port = 0;
+    opts->socket[0] = '\0';
 
     opts->call[0] = '\0';
     opts->ssid = 0;

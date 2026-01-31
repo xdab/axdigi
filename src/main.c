@@ -3,14 +3,15 @@
 #include <signal.h>
 #include <common.h>
 #include <buffer.h>
-#include <tcp.h>
 #include <time.h>
+#include "connection.h"
 #include "digipeater.h"
 #include "deduplicator.h"
 #include "packet.h"
 #include "options.h"
 
-#define TCP_SEND_BUF_SIZE 512
+#define READ_BUF_SIZE 2048
+#define SEND_BUF_SIZE 512
 
 static volatile sig_atomic_t g_shutdown_requested = 0;
 
@@ -31,20 +32,20 @@ int main(int argc, char *argv[])
     _log_level = opts.log_level;
     _func_pad = -18;
 
-    tcp_client_t client;
+    connection_t conn;
     kiss_decoder_t decoder;
     ax25_packet_t packet;
 
-    char tcp_buf_data[TCP_READ_BUF_SIZE];
-    char tcp_send_buf_data[TCP_SEND_BUF_SIZE];
+    char buf_data[READ_BUF_SIZE];
+    char send_buf_data[SEND_BUF_SIZE];
 
-    buffer_t tcp_buf = {
-        .data = tcp_buf_data,
-        .capacity = TCP_READ_BUF_SIZE,
+    buffer_t buf = {
+        .data = buf_data,
+        .capacity = READ_BUF_SIZE,
         .size = 0};
-    buffer_t tcp_send_buf = {
-        .data = tcp_send_buf_data,
-        .capacity = TCP_SEND_BUF_SIZE,
+    buffer_t send_buf = {
+        .data = send_buf_data,
+        .capacity = SEND_BUF_SIZE,
         .size = 0};
 
     signal(SIGINT, signal_handler);
@@ -68,9 +69,16 @@ int main(int argc, char *argv[])
     if (opts.dry_run)
         LOG("dry run mode enabled, no packets will be transmitted");
 
-    LOG("connecting to TNC at %s:%d...", opts.host, opts.port);
+    if (opts.socket[0] != '\0')
+    {
+        LOG("connecting to TNC via Unix socket at %s...", opts.socket);
+    }
+    else
+    {
+        LOG("connecting to TNC via TCP at %s:%d...", opts.host, opts.port);
+    }
 
-    if (tcp_client_init(&client, opts.host, opts.port) < 0)
+    if (connection_init(&conn, opts.host, opts.port, opts.socket) < 0)
     {
         LOG("failed to connect to TNC");
         goto SHUTDOWN;
@@ -80,7 +88,7 @@ int main(int argc, char *argv[])
 
     while (!g_shutdown_requested)
     {
-        int len = tcp_client_listen(&client, &tcp_buf);
+        int len = connection_listen(&conn, &buf);
         if (len < 0)
         {
             LOG("connection lost");
@@ -92,7 +100,7 @@ int main(int argc, char *argv[])
 
         for (int i = 0; i < len; i++)
         {
-            if (!packet_decode(&decoder, tcp_buf_data[i], &packet))
+            if (!packet_decode(&decoder, buf_data[i], &packet))
                 continue;
 
             if (!deduplicator_check(&rx_dedup, &packet))
@@ -112,7 +120,7 @@ int main(int argc, char *argv[])
                 continue;
             }
 
-            if (!packet_encode(&packet, &tcp_send_buf))
+            if (!packet_encode(&packet, &send_buf))
             {
                 LOGV("could not encode packet for tx");
                 continue;
@@ -120,7 +128,7 @@ int main(int argc, char *argv[])
 
             packet_log(opts.dry_run ? "D" : ">", &packet);
 
-            if (!opts.dry_run && tcp_client_send(&client, &tcp_send_buf) < 0)
+            if (!opts.dry_run && connection_send(&conn, &send_buf) < 0)
             {
                 LOG("failed to send packet");
                 goto SHUTDOWN;
@@ -130,7 +138,7 @@ int main(int argc, char *argv[])
 
 SHUTDOWN:
     LOG("shutting down...");
-    tcp_client_free(&client);
+    connection_free(&conn);
 
     return 0;
 }

@@ -2,140 +2,125 @@
 
 AX.25 layer 2 digipeater for networked TNCs.
 
-## WORK IN PROGRESS
+### What it is
 
-**This project is a WORK IN PROGRESS!**
+A pure layer-2 AX.25 digipeater software that connects to KISS TNCs via TCP or Unix socket. It handles:
 
-There is no description, no configurability, no tests, debug prints everywher, AI slop code and other similar features.
+- **Traced aliases** (WIDE2-2, TRACE3-1) — decrements hops, prepends own callsign
+- **Untraced aliases** (SP3-1, AROS3-1) — just decrements hops
+- **Own callsign digipeating** — marks itself in path
+- **Basic packet deduplication** — prevents most duplicate transmissions
 
-Viewer discretion is advised.
+### What it isn't
 
-## TODO
+This project is **not**:
 
-- [x] Implement basic TCP client connecting to TNC (hardcoded IP/port)
-  - [x] Use `tcp_client_init()` from libtnc
-  - [x] Connect to 192.168.0.9:8144
-  - [x] Handle connection errors
-  - [x] Main event loop with select()
+- A TNC — just a digipeater, no modulation/demodulation
+- APRS-aware — no filtering based on position, packet type, no beaconing, i-gating etc.
+- Cross-platform — Linux-only (uses Unix sockets, signal handling)
 
-- [x] Implement KISS frame decoding pipeline
-  - [x] Initialize `kiss_decoder_t`
-  - [x] Process TCP bytes through decoder
-  - [x] Handle complete KISS messages
-  - [x] Parse AX.25 packet from KISS data
-
-- [x] Implement TNC2 output to stdout
-  - [x] Use `tnc2_packet_to_string()` from libtnc
-  - [x] Print each packet on new line
-  - [x] Flush stdout after each packet
-
-- [ ] Create unit test framework (axdigi_test executable)
-  - [ ] Create `src/test.c` with main entry point
-  - [ ] Implement `assert_true()`, `assert_false()`, `assert_int_eq()` helpers
-  - [ ] Track `assertions_passed` and `assertions_failed` as static int counters
-  - [ ] Print test results (passed/failed counts)
-  - [ ] Return exit code -1 if failures > 0, else 0
-  - [ ] Update CMakeLists.txt to create `axdigi_test` executable
-  - [ ] Add `make test` target to run tests
-  - [ ] Link against libtnc and math library
-  
-- [ ] Implement basic digipeater logic (own callsign)
-  - [x] Detect own callsign in packet path
-  - [ ] Set repeated flag on matching ax25_addr
-  - [ ] Re-encode packet for transmission
-  - [ ] Send back via TCP to TNC
-  - [ ] Test: own callsign in path gets repeated flag set
-  - [ ] Test: packet without own callsign is not modified
-  - [ ] Test: multiple occurrences of callsign handled correctly
-
-- [ ] Implement traced alias digipeating (WIDE2-2, TRACE3-1)
-  - [x] Parse alias format: NAME-HOPS (e.g., WIDE2-2)
-  - [ ] Decrement hops remaining counter
-  - [ ] Prepend own callsign (repeated=true) before alias
-  - [ ] When hops reach 0, mark alias as repeated (NAME*)
-  - [ ] Support multiple traced aliases in path
-  - [ ] Test: WIDE2-2 becomes WIDE2-1 after first hop, callsign prepended
-  - [ ] Test: WIDE2-1 becomes WIDE2* (repeated), callsign prepended
-  - [ ] Test: TRACE3-1 handling and final repeated marking
-  - [ ] Test: Multiple traced aliases in same path
-
-- [ ] Implement untraced alias digipeating (SP3-1, AROS3-1)
-  - [x] Parse alias format: NAME-HOPS (e.g., SP3-1)
-  - [ ] Decrement hops remaining counter
-  - [ ] Mark alias as repeated when hops reach 0
-  - [ ] Do NOT prepend callsign before alias
-  - [ ] Support multiple untraced aliases in path
-  - [ ] Test: SP3-1 becomes SP3* (repeated), NO callsign prepended
-  - [ ] Test: AROS2-1 handling and final repeated marking
-  - [ ] Test: Multiple untraced aliases in same path
-
-- [ ] Add TNC2 protocol support (alternative to KISS)
-  - [ ] Add command-line protocol selection
-  - [ ] Implement TNC2 frame parsing
-  - [ ] Handle both KISS and TNC2 input formats
-
-- [ ] Create `options.c/h` with unified options struct
-  - [ ] Define `options_t` struct
-  - [ ] Add default values
-  - [ ] Declare parsing functions
-
-- [ ] Implement `options_args` for GNU argp CLI parsing
-  - [ ] Define argp program version
-  - [ ] Create option definitions
-  - [ ] Parse handler function
-  - [ ] Populate options_t from CLI
-
-- [ ] Implement `options_file` for conf.c config file parsing
-  - [ ] Load config file with `conf_load()`
-  - [ ] Map config keys to options
-  - [ ] Override defaults from file
-
-- [ ] Define configuration options (TNC address/port, protocol, callsign, verbose)
-  - [ ] `--tnc-host` / `tnc_host`
-  - [ ] `--tnc-port` / `tnc_port`
-  - [ ] `--protocol` / `protocol` (kiss/tnc2)
-  - [ ] `--callsign` / `callsign`
-  - [ ] `--verbose` / `verbose`
-  - [ ] Test: CLI args override default values correctly
-  - [ ] Test: Config file values override defaults
-  - [ ] Test: CLI args override config file values
-
-- [ ] Define digipeater configuration options (aliases)
-  - [ ] `--traced-aliases` / `traced_aliases` (e.g., "WIDE,TRACE,QCARE")
-  - [ ] `--untraced-aliases` / `untraced_aliases` (e.g., "SP,AROS,SR")
-  - [ ] Parse comma-separated alias lists
-  - [ ] Validate alias format (NAME-HOPS)
-  - [ ] Test: traced_aliases parsed into array correctly
-  - [ ] Test: untraced_aliases parsed into array correctly
-  - [ ] Test: empty alias lists handled gracefully
-
-## Overview
-
-This is a pure layer-2 AX.25 digipeater. It connects to a networked TNC via TCP and handles AX.25 packet digipeating.
-
-### Dependencies
-
-- **libtnc**: AX.25 packet handling library (included as submodule)
-  - TCP client/server for network connectivity
-  - KISS and TNC2 frame encoding/decoding
-  - AX.25 packet parsing and construction
-  - Configuration file parsing
-
-### Building
+## Build
 
 ```bash
-cmake -B build
-cmake --build build
+make update # pulls and updates submobules
+make clean
+make build # build with debug symbols, no optimizations
+make release # build with all optimizations, strip symbols
 ```
 
-### Usage
+## Usage
 
 ```bash
-axdigi --tnc-host 192.168.0.9 --tnc-port 8144 --callsign N0CALL-1
+# TCP TNC connection
+axdigi -h 192.168.0.9 -p 8144 -C SR5DZ -s 0 -u SP,XR,ND -t WIDE,TRACE -U 2 -T 2
+
+# Unix socket TNC
+axdigi -x /run/tnc.sock -C SR5DZ -s 0
+
+# Configuration file
+axdigi -c axdigi.conf
+
+# Dry run (no packets transmitted)
+axdigi -n -C SR5DZ -s 0
 ```
 
-Or via configuration file:
+## Command Line Arguments
 
-```bash
-axdigi -f axdigi.conf
+| Short      | Long                    | Description                         |
+| ---------- | ----------------------- | ----------------------------------- |
+| `-c FILE`  | `--config=FILE`         | Configuration file                  |
+| `-h ADDR`  | `--host=ADDR`           | TNC TCP address                     |
+| `-p PORT`  | `--port=PORT`           | TNC TCP port                        |
+| `-x SOCK`  | `--socket=SOCK`         | TNC Unix socket path                |
+| `-C CALL`  | `--call=CALL`           | Digipeater callsign                 |
+| `-s SSID`  | `--ssid=SSID`           | Digipeater SSID (0-15)              |
+| `-t ALIAS` | `--traced=ALIAS`        | Traced aliases (comma-separated)    |
+| `-u ALIAS` | `--untraced=ALIAS`      | Untraced aliases (comma-separated)  |
+| `-T N`     | `--max-traced-hops=N`   | Max hops for traced aliases         |
+| `-U N`     | `--max-untraced-hops=N` | Max hops for untraced aliases       |
+| `-v LEVEL` | `--log-level=LEVEL`     | Log level: standard, verbose, debug |
+| `-n`       | `--dry-run`             | Don't transmit packets              |
+
+## Configuration File
+
+Optionally, configuration can be read from a file using `-c FILE` or `--config=FILE`.
+
+The file uses simple `key=value` syntax with `#` comments.
+
+### Example
+
+```ini
+# axdigi.conf
+host=192.168.0.9
+port=8144
+call=SR5DZ
+ssid=0
+aliases-traced=WIDE,TRACE
+aliases-untraced=SP,XR,ND
+max-traced-hops=2
+max-untraced-hops=2
+log-level=verbose
+dry-run=false
 ```
+
+## Alias behavior
+
+### Traced aliases (e.g., WIDE, TRACE)
+
+- Decrement hop counter on each digipeat
+- Prepend own callsign (repeated=true) before the alias
+- When hops reach 0, mark alias as repeated (NAME*)
+
+For example:
+`WIDE2-2` becomes `SR5DZ*,WIDE2-1` and if somehow digipeated again would become `SR5DZ*,SR5DZ*,WIDE2*`.
+
+### Untraced aliases (e.g., SP, MZ)
+
+- Decrement hop counter on each digipeat
+- Do NOT prepend own callsign
+- When hops reach 0, mark alias as repeated (NAME*)
+
+For example: `SP3-2` becomes first `SP3-1` and then might become `SP3*` when bounced off another digi.
+
+
+
+## Dependencies
+
+- **libtnc**: included as a [git submodule](libs/libtnc/)
+  - AX.25, KISS, CRC and networking routines
+
+
+## Installation
+
+There is a helper Make target `make install` which handles everything from compilation to asking for SU rights and installing files to the relevant directories.
+
+Systemd service `axdigi.service` will be installed as well.
+Please review the unit file and adjust for your needs.
+
+## License
+
+GNU General Public License v3.0 - see [LICENSE](LICENSE)
+
+---
+
+**Development notes:** See [.clinerules](.clinerules) for AI-friendly technical documentation.

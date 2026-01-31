@@ -1,0 +1,111 @@
+# .clinerules - Technical Rules for axdigi
+
+A pure layer-2 AX.25 digipeater for networked TNCs. Connects via TCP or Unix socket, implements KISS protocol, traced/untraced alias digipeating, and packet deduplication. Protocol implementation in [libtnc](libs/libtnc/) submodule.
+
+## Architecture
+
+**Single-threaded event loop** with blocking I/O via `select()`:
+
+```
+main() → opts_parse_args/conf/defaults → connection_init → event_loop
+                                                            ↓
+                                    TCP/UDS → packet_decode → deduplicate
+                                                            ↓
+                                    digipeater_process → packet_encode → TCP/UDS
+```
+
+## Module Breakdown
+
+**Core** (src/)
+
+- `main.c`: Initialize options, connection, digipeater; main event loop with signal handling
+- `options.c/h`, `options_args.c`, `options_file.c`: Unified options_t struct with CLI/config parsing
+- `connection.c/h`: TCP client or Unix domain socket abstraction (libtnc wrappers)
+- `packet.c/h`: KISS decode/encode glue, packet logging
+- `digipeater.c/h`: Digipeating logic (own callsign + alias handling)
+- `alias.c/h`: Alias list management (traced/untraced)
+- `deduplicator.c/h`: CRC-based frame deduplication with expiration window
+
+**libtnc** (libs/libtnc/ submodule)
+
+- AX.25 packet parsing/construction (`ax25.h`, `ax25.c`)
+- KISS frame encoding/decoding (`kiss.h`, `kiss.c`)
+- TCP client (`tcp.h`, `tcp.c`)
+- Unix domain socket (`uds.h`, `uds.c`)
+- Buffer utilities (`buffer.h`, `buffer.c`)
+- Logging (`common.h`, `common.c`)
+
+## Code Style
+
+- **Minimal comments** — self-explanatory code preferred
+- **Error handling**: 0 = success, negative = error (via libtnc conventions)
+- **Buffer safety**: Always pass buffer_t with size/capacity fields
+- **Goto for cleanup** only in main()
+- **Prefix conventions**: `opts_*`, `connection_*`, `packet_*`, `digipeater_*`, `alias_*`, `deduplicator_*`
+
+## Deduplication Strategy
+
+Two deduplicators in main event loop:
+
+1. **rx_dedup**: Prevents processing duplicate packets from TNC
+2. **tx_dedup**: Prevents transmitting duplicate packets back to TNC
+
+Uses CRC-based duplicate detection with time-based expiration window.
+
+## Digipeater Logic
+
+**Own callsign detection**: Matches callsign+SSID in packet path, marks as repeated.
+
+**Alias processing order**:
+
+1. Scan path for matching aliases (traced or untraced)
+2. For traced: decrement hops, prepend own callsign (repeated=true)
+3. For untraced: decrement hops, no callsign prepend
+4. When hops reach 0: mark alias as repeated (NAME*)
+
+## Logging
+
+Macros from libtnc `common.h`, output to stderr:
+
+- `LOG(str, ...)`: Always visible
+- `LOGV(str, ...)`: Verbose mode
+- `LOGD(str, ...)`: Debug mode only
+- `EXIT(code, str, ...)`: Fatal error
+
+Messages: lowercase start, no period/newline (auto-added).
+
+## Build
+
+**CMake targets**:
+
+- `axdigi`: Main digipeater executable
+- `ax_test`: Unit tests (alias, deduplicator, digipeater, packet)
+
+**Build types**: Debug (`-pg -O0`), Release (`-O3 -flto -gc-sections`)
+
+**Makefile targets**: `build`, `release`, `test`, `clean`
+
+**Dependencies**: libtnc (submodule), math library (-lm)
+
+## Configuration
+
+Options precedence (highest to lowest):
+
+1. CLI arguments
+2. Config file values
+3. Default values
+
+Config file uses `key=value` syntax with `#` comments. Same keys as CLI long options.
+
+## Error Handling
+
+- Signal handlers (SIGINT, SIGTERM) set `g_shutdown_requested` flag
+- Connection errors trigger graceful shutdown
+- Packet encode failures logged (verbose), continue processing
+- Invalid packets skipped, loop continues
+
+## Testing
+
+- `make test` runs ax_test executable
+- Test files in `test/` directory with `test_*.h` functions
+- Tests: alias comparison, deduplication, digipeater path modification, packet encode/decode

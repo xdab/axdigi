@@ -16,5 +16,10 @@ add_executable(axdigi ${SOURCES})
 target_link_libraries(axdigi PRIVATE tnc m)
 target_include_directories(axdigi PRIVATE libs/libtnc/include)
 
+# ax_test: unit tests
+add_executable(ax_test test/main_test.c test/test.c src/alias.c src/deduplicator.c src/digipeater.c src/packet.c)
+target_link_libraries(ax_test PRIVATE tnc m)
+target_include_directories(ax_test PRIVATE libs/libtnc/include)
+
 # Installation
 install(TARGETS axdigi DESTINATION ${CMAKE_INSTALL_BINDIR})

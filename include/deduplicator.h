@@ -15,3 +15,4 @@ typedef struct
 
 void deduplicator_init(deduplicator_t *d);
 bool deduplicator_check(deduplicator_t *d, const ax25_packet_t *packet);
+bool deduplicator_check_at(deduplicator_t *d, const ax25_packet_t *packet, time_t time);

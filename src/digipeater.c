@@ -47,6 +47,9 @@ bool digipeater_process(digipeater_t *d, ax25_packet_t *packet)
             LOGV("already repeated");
             return false;
         }
+
+        own_call_addr->repeated = true;
+        return true;
     }
 
     if (alias_idx < 0)

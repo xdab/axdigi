@@ -1,4 +1,4 @@
-.PHONY: build run clean install update
+.PHONY: build run test clean install update
 
 .DEFAULT_GOAL := run
 
@@ -8,6 +8,9 @@ build:
 
 run: build
 	./build/axdigi
+
+test: build
+	./build/ax_test
 
 clean:
 	rm -rf build

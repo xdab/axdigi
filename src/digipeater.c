@@ -16,7 +16,7 @@ bool digipeater_process(digipeater_t *d, ax25_packet_t *packet)
 {
     if (!strncasecmp(packet->source.callsign, d->own_call.callsign, AX25_ADDR_MAX_CALLSIGN_LEN) && packet->source.ssid == d->own_call.ssid)
     {
-        LOGV("own packet");
+        LOGV("x own packet");
         return false;
     }
 
@@ -40,11 +40,11 @@ bool digipeater_process(digipeater_t *d, ax25_packet_t *packet)
 
     if (own_call_idx >= 0)
     {
-        LOGV("own call at index %d", own_call_idx);
+        LOGV("  own call at index %d", own_call_idx);
         ax25_addr_t *own_call_addr = &packet->path[own_call_idx];
         if (own_call_addr->repeated)
         {
-            LOGV("already repeated");
+            LOGV("x already repeated");
             return false;
         }
 
@@ -54,15 +54,15 @@ bool digipeater_process(digipeater_t *d, ax25_packet_t *packet)
 
     if (alias_idx < 0)
     {
-        LOGV("no matching digipeating instruction");
+        LOGV("x no matching digipeating instruction");
         return false;
     }
 
-    LOGV("alias at index %d, %straced", alias_idx, alias->traced ? "" : "un");
+    LOGV("  alias at index %d, %straced", alias_idx, alias->traced ? "" : "un");
 
     if (0 == packet->path[alias_idx].ssid)
     {
-        LOGV("fully used alias");
+        LOGV("x fully used alias");
         return false;
     }
 
@@ -70,7 +70,7 @@ bool digipeater_process(digipeater_t *d, ax25_packet_t *packet)
     {
         if (packet->path_len == AX25_MAX_PATH_LEN)
         {
-            LOGV("packet path full");
+            LOGV("x packet path full");
             return false;
         }
 

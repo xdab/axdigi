@@ -29,7 +29,7 @@ int main(int argc, char *argv[])
     opts_defaults(&opts);
 
     _log_level = opts.log_level;
-    _func_pad = -16;
+    _func_pad = -18;
 
     tcp_client_t client;
     kiss_decoder_t decoder;
@@ -97,7 +97,7 @@ int main(int argc, char *argv[])
 
             if (!deduplicator_check(&rx_dedup, &packet))
             {
-                LOGV("< duplicate");
+                LOGV("< (duplicate)");
                 continue;
             }
 
@@ -108,7 +108,7 @@ int main(int argc, char *argv[])
 
             if (!deduplicator_check(&tx_dedup, &packet))
             {
-                LOGV("would transmit duplicate");
+                LOGV("x would transmit duplicate");
                 continue;
             }
 
@@ -118,7 +118,7 @@ int main(int argc, char *argv[])
                 continue;
             }
 
-            packet_log(opts.dry_run ? "DDDDD" : ">>>>>", &packet);
+            packet_log(opts.dry_run ? "D" : ">", &packet);
 
             if (!opts.dry_run && tcp_client_send(&client, &tcp_send_buf) < 0)
             {

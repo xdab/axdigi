@@ -13,7 +13,7 @@ release:
 	cd build && make -j
 
 run: build
-	./build/axdigi
+	./build/axdigi -c sample.conf
 
 test: build
 	./build/ax_test

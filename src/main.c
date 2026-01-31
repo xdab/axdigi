@@ -8,6 +8,7 @@
 #include "digipeater.h"
 #include "deduplicator.h"
 #include "packet.h"
+#include "options.h"
 
 #define TCP_SEND_BUF_SIZE 512
 
@@ -19,8 +20,17 @@ static void signal_handler(int sig)
     g_shutdown_requested = 1;
 }
 
-int main(void)
+int main(int argc, char *argv[])
 {
+    options_t opts = {0};
+    opts_init(&opts);
+    opts_parse_args(&opts, argc, argv);
+    opts_parse_conf_file(&opts, opts.config_file);
+    opts_defaults(&opts);
+
+    _log_level = opts.log_level;
+    _func_pad = -16;
+
     tcp_client_t client;
     kiss_decoder_t decoder;
     ax25_packet_t packet;
@@ -37,30 +47,30 @@ int main(void)
         .capacity = TCP_SEND_BUF_SIZE,
         .size = 0};
 
-    _log_level = LOG_LEVEL_VERBOSE;
-    _func_pad = -16;
-
     signal(SIGINT, signal_handler);
     signal(SIGTERM, signal_handler);
 
     digipeater_t digipeater;
     deduplicator_t rx_dedup, tx_dedup;
 
-    digipeater_init(&digipeater, "SR5DZ", 0);
-    digipeater_add_alias(&digipeater, "SP", 2, false);
-    digipeater_add_alias(&digipeater, "XR", 2, false);
-    digipeater_add_alias(&digipeater, "ND", 2, false);
-    digipeater_add_alias(&digipeater, "WIDE", 2, true);
-    digipeater_add_alias(&digipeater, "TRACE", 2, true);
+    digipeater_init(&digipeater, opts.call, opts.ssid);
+
+    opts_alias_t aliases[OPT_MAX_ALIASES];
+    int num_aliases = opts_parse_aliases(&opts, aliases, OPT_MAX_ALIASES);
+    for (int i = 0; i < num_aliases; i++)
+        digipeater_add_alias(&digipeater, aliases[i].name, aliases[i].hops, aliases[i].traced);
 
     deduplicator_init(&rx_dedup);
     deduplicator_init(&tx_dedup);
 
     kiss_decoder_init(&decoder);
 
-    LOG("connecting to TNC at 192.168.0.9:8144...");
+    if (opts.dry_run)
+        LOG("dry run mode enabled, no packets will be transmitted");
 
-    if (tcp_client_init(&client, "192.168.0.9", 8144) < 0)
+    LOG("connecting to TNC at %s:%d...", opts.host, opts.port);
+
+    if (tcp_client_init(&client, opts.host, opts.port) < 0)
     {
         LOG("failed to connect to TNC");
         goto SHUTDOWN;
@@ -108,9 +118,9 @@ int main(void)
                 continue;
             }
 
-            packet_log(">>>>>", &packet);
+            packet_log(opts.dry_run ? "DDDDD" : ">>>>>", &packet);
 
-            if (tcp_client_send(&client, &tcp_send_buf) < 0)
+            if (!opts.dry_run && tcp_client_send(&client, &tcp_send_buf) < 0)
             {
                 LOG("failed to send packet");
                 goto SHUTDOWN;

@@ -8,13 +8,13 @@ int connection_init(connection_t *conn, const char *host, int port, const char *
     if (socket != NULL && socket[0] != '\0')
     {
         conn->type = CONNECTION_UDS;
-        if (uds_client_init(&conn->client.uds, socket) < 0)
+        if (uds_client_init(&conn->client.uds, socket, UDS_DEF_TIMEOUT_MS) < 0)
             return -1;
         return 0;
     }
 
     conn->type = CONNECTION_TCP;
-    if (tcp_client_init(&conn->client.tcp, host, port) < 0)
+    if (tcp_client_init(&conn->client.tcp, host, port, TCP_DEF_TIMEOUT_MS) < 0)
         return -1;
 
     return 0;

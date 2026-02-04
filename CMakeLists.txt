@@ -24,18 +24,19 @@ set(CMAKE_EXE_LINKER_FLAGS_RELEASE "${CMAKE_EXE_LINKER_FLAGS_RELEASE} ${RELEASE_
 include(GNUInstallDirs)
 include_directories(include)
 
-# Add the libtnc subdirectory
+# Add submodules
 add_subdirectory(libs/libtnc)
+add_subdirectory(libs/libcomm)
 
 file(GLOB SOURCES "src/*.c")
 add_executable(axdigi ${SOURCES})
-target_link_libraries(axdigi PRIVATE tnc m)
-target_include_directories(axdigi PRIVATE libs/libtnc/include)
+target_link_libraries(axdigi PRIVATE tnc comm m)
+target_include_directories(axdigi PRIVATE libs/libtnc/include libs/libcomm/include)
 
 # ax_test: unit tests
 add_executable(ax_test test/main_test.c test/test.c src/alias.c src/deduplicator.c src/digipeater.c src/packet.c)
-target_link_libraries(ax_test PRIVATE tnc m)
-target_include_directories(ax_test PRIVATE libs/libtnc/include)
+target_link_libraries(ax_test PRIVATE tnc comm m)
+target_include_directories(ax_test PRIVATE libs/libtnc/include libs/libcomm/include)
 
 # Strip symbols in Release builds
 if(NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
